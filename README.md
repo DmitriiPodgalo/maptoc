@@ -24,4 +24,5 @@ json, png, csv
 
 ### Modes
 default: tokenisation
+
 -m: mapping
