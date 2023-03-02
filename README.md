@@ -6,14 +6,15 @@
 Software for mapping and tokenisation human genome tokens to a genome of another organism.
 
 ## Installation
-Download *maptoc*, *install.py*, *requirements.txt*.
+Download **maptoc**, **install.py**, **requirements.txt**.
+
 Run:
 ```
 python install.py
 pip install -r requirements.txt
 ```
 
-Run *maptoc* as linux command.
+Run **maptoc** as linux command.
 
 ### Input data
 fasta file
