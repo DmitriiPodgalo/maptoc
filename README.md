@@ -1,5 +1,7 @@
 # maptoc
 
+<img src="https://raw.github.com/DmitriiPodgalo/maptoc/logo.png" alt="drawing" width="500"/>
+
 ## ITMO Megaschool project in Applied Genomics
 ### Authors: Dmitrii Podgalo, Aleksandra Kozlova
 
