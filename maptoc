@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Mar  1 18:08:48 2023
+
+@author: dmitriipodgalo
+"""
+
+import json
+from urllib.request import urlopen
+from Bio import SeqIO
+import matplotlib.pyplot as plt
+import argparse
+from transformers import AutoTokenizer
+from collections import defaultdict
+import os
+import pandas as pd
+
+json_url = 'https://huggingface.co/AIRI-Institute/gena-lm-bert-base/raw/main/tokenizer.json'
+
+def parser():
+     parser = argparse.ArgumentParser()
+     parser.add_argument('-in1', '--input1', help='fasta file', action='store')
+     parser.add_argument('-in2', '--input2', help='optional fasta file for comparison', action='store')
+     parser.add_argument('-m', '--mapping', help='mapping mode', action='store_true')
+
+     return parser.parse_args()
+
+
+def main():
+    args = parser()
+    fasta_path1 = args.input1
+    fasta_path2 = args.input2
+    is_mapping = args.mapping
+
+    tokens = read_json(json_url)
+    res1 = fasta_analyse(tokens, fasta_path1, is_mapping)
+    if fasta_path2 is not None:
+        res2 = fasta_analyse(tokens, fasta_path2, is_mapping)
+        plot_tokens_comparison(res1, res2, 0, 0)
+
+    
+def fasta_analyse(tokens, fasta_path, is_mapping):
+    print('Start analyse', fasta_path)
+
+    genome = read_fasta(fasta_path)
+
+    if is_mapping:
+        res = mapping(genome, tokens)
+    else:
+        res = tokenisation(genome)
+    
+    file_name = os.path.basename(os.path.normpath(fasta_path)) + '.tokens'
+
+    write_json(file_name, res)
+
+    print('Number of tokens:', len(res))
+    start, stop = list(int(i) for i in input('Please, input start and stop tokens number separated by a space: ').split())
+
+    plot_tokens(res, start, stop, file_name)
+
+    print('End analyse', fasta_path)
+    
+    return res
+
+
+def read_fasta(fasta_path):
+    '''
+    Returns list of second string of fasta file
+    '''
+    parsed_fasta = []
+    fasta_seq = SeqIO.parse(open(fasta_path), 'fasta')
+
+    for fasta in fasta_seq:
+        _, seq = fasta.id, str(fasta.seq)
+        parsed_fasta.append(seq)
+
+    return parsed_fasta
+
+
+def read_json(json_url):
+    '''
+    Returns dictionary of tokens that equal or more then 11
+    '''
+    raw_json = urlopen(json_url)
+    json_file = json.load(raw_json)
+    tokens = json_file['model']['vocab']
+    tokens = {key: value for key, value in tokens.items() if len(key) >= 11}
+
+    return list(tokens.keys())
+
+
+def mapping(genome, tokens):
+    '''
+    Returns dictionary of frequency of tokens in genome
+    '''
+    summary = dict()
+
+    for chromosome in genome:
+        for token in tokens:
+            if token in chromosome:
+                if token in summary:
+                    summary[token] += chromosome.count(token)
+                else:
+                    summary[token] = chromosome.count(token)
+                    
+    summary = dict(sorted(summary.items(), key=lambda item: item[1]))
+    
+    return summary
+
+
+def plot_tokens(tokens, start, stop, file_name):
+    '''
+    Plot frequency of tokens in genome
+    The tokens are sorted in assending order
+    To get tokens from start input up to what positive number
+    To get tokens from end input from to what negative number
+    '''
+    lens = list(len(key) for key in tokens.keys())
+    start = int(start) - 1
+    stop = int(stop)
+
+    labels = list(tokens.keys())[start:stop]
+    freq = list(tokens.values())[start:stop]
+    lens = lens[start:stop]
+
+    fig, ax = plt.subplots()
+    scatter = ax.scatter(labels, freq, c=lens)
+
+    legend = ax.legend(*scatter.legend_elements(), loc="lower left", title="Token length")
+    ax.add_artist(legend)
+
+    plt.xticks(labels, rotation = 90)
+    plt.yticks(range(max(freq)+1))
+    plt.title("Tokens frequency")
+    
+    plt.savefig(file_name + '.png')
+    
+
+def tokenisation(genome):
+    '''
+    Returns dictionary token: frequency where token equal or more then 11 by length
+    '''
+    tokenizer = AutoTokenizer.from_pretrained('AIRI-Institute/gena-lm-bert-base')
+    summary = defaultdict(int)
+
+    for chromosome in genome:
+        ids = tokenizer(chromosome)['input_ids']
+        for token in tokenizer.convert_ids_to_tokens(ids):
+            summary[token] += 1
+
+    summary = dict(sorted(summary.items(), key=lambda item: item[1]))
+    summary = {key: value for key, value in summary.items() if len(key) >= 11}
+
+    return summary
+
+
+def plot_tokens_comparison(a, b, start, stop):
+    '''
+    Plot frequency of tokens in genome
+    The tokens are sorted in assending order
+    To get tokens from start input up to what positive number
+    To get tokens from end input from to what negative number
+    '''
+
+    df1 = pd.DataFrame({'1': a.values()}, index=a.keys())
+    df2 = pd.DataFrame({'2': b.values()}, index=b.keys())
+    df = pd.merge(df1, df2, left_index=True, right_index=True)
+
+    fig = df.plot.bar(rot=0)
+    fig.get_figure().savefig('tokens_comparison.png')
+    df.to_csv('tokens_comparison.csv')
+
+    start = int(start) - 1
+    stop = int(stop) - 1
+
+
+def write_json(file_name, res):
+    with open(file_name + '.json', 'w') as ouf:
+        json.dump(res, ouf)
+
+
+if __name__ == '__main__':
+    main()
